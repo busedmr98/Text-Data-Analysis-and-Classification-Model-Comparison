@@ -1,0 +1,1358 @@
+# Load the data
+bipolar <- read_csv("nlpdata/bipolar_2020.csv")
+bipolar$subreddit[bipolar$subreddit == "bipolarreddit"] <- "bipolar"
+EDA<- read_csv("nlpdata/EDAnonymous_2020.csv")
+anxiety <- read_csv("nlpdata/socialanxiety_2020.csv")
+ptsd <- read_csv("nlpdata/ptsd_2020.csv")
+
+# Remove dates and user names
+bipolar <- bipolar[,-2:-3] #dim 1368 row 2 coloumn
+EDA <- EDA[,-2:-3] #dim 5042 row 2 coloumn
+anxiety <- anxiety[,-2:-3] #dim 3738 row 2 coloumn
+ptsd <- ptsd[,-2:-3]# 2059 row 2 coloumn
+
+# Combine all data into one dataset
+data <- rbind(bipolar, EDA, anxiety, ptsd) # 12207 row 2 coloumn
+
+# Define custom stopwords using paste0 for special characters and contractions
+custom_stopwords <- c('Ä±', "Ä±m", "Ä±ll", "Ä±d", "Ä±s", "Ä±t", "Ä±f", "ive", "if",
+                      "its", "im", "1", "2", "3", "4", "5", "10", "100", "https", "lol", "Ä±ts", "haha", 
+                      "tho", "fuck", "fucked", "fcked", "fucking", "fucks", "fuckup", "dick", 'shit', 
+                      "shitty", "bullshit", "shittiest", "fucking", "fuckin", "fucker", "fuckgif", 
+                      "motherfucker", "bitches", "bitching", "bitch", "damn", "know", "get", "just", 
+                      "like", "made", "make", "makes", "can", "cant", "started", "back", "one", "two", 
+                      "want", "help", "first", "even", "time", "got", "much", "things", "able", "around", 
+                      "thing", "take", "every", "felt", "getting", "will", "would", "also", "dont", 
+                      "ever", "say", "told", "tell", "said", "lot", "else", "since", "will", "feels", "have","take",
+                      "thinking", "think", "go", "going", "feeling", "now", "really", "thanks", "reading", 
+                      "currently", "yes", "no", "suck", "may","thank", "week", "almost", "see", "th", "month", 
+                      "keep", "way", paste0("'", "m"), paste0("'", "ve"), paste0("Ä±", "v"), paste0("Ä±", "ve"), 
+                      paste0("Ä±t", "s"), paste0("Ä±", "m"), paste0("i", "v"), paste0("can", "t"), paste0("don", "t"), 
+                      paste0(",", ""), paste0(" ", "m"), paste0(" ", "s"),"episode","anyone","year","day","come","take",
+                      "still","use","long","try","ask","talk","isnt","etc", "didnt","year", "something","have","give","everything","anything")
+
+# Combine standard stopwords and custom stopwords
+all_stopwords <- c(stopwords("en"), custom_stopwords)
+
+# Function to preprocess text
+preprocess_text <- function(text) {
+  # Convert to lowercase
+  text <- tolower(text)
+  
+  # Remove specific punctuation (apostrophes and commas)
+  text <- gsub("'", "", text)  # Remove apostrophes
+  text <- gsub(",", "", text)  # Remove commas
+  
+  # Remove other punctuation
+  text <- removePunctuation(text)
+  
+  # Remove numbers
+  text <- removeNumbers(text)
+  
+  # Remove stopwords
+  text <- removeWords(text, all_stopwords)
+  
+  # Remove URLs
+  text <- gsub("http\\S+|www\\S+|https\\S+", "", text, perl=TRUE)
+  
+  # Remove non-ASCII characters
+  text <- iconv(text, "UTF-8", "ASCII", sub="")
+  
+  # Remove extra whitespace
+  text <- stripWhitespace(text)
+  
+  # Lemmatization
+  text <- lemmatize_strings(text)
+  
+  # Remove short words (e.g., less than 3 characters)
+  text <- gsub("\\b\\w{1,2}\\b", "", text)
+  
+  return(text)
+}
+
+# Apply preprocessing
+
+
+# Preprocess specific subsets
+anxiety$post <- sapply(anxiety$post, preprocess_text)
+bipolar$post <- sapply(bipolar$post, preprocess_text)
+EDA$post <- sapply(EDA$post, preprocess_text)
+ptsd$post <- sapply(ptsd$post, preprocess_text)
+
+data$post <- sapply(data$post, preprocess_text)
+# Print a sample of the preprocessed text
+print(data$post[1:5])
+
+
+
+
+# Function to create a word cloud
+create_wordcloud <- function(text_data, title) {
+  words <- unlist(strsplit(text_data, " "))
+  wordcloud(words = words, max.words = 200, random.order = FALSE, colors = brewer.pal(6, "Dark2"))
+  title(main = title)
+}
+
+# Create word clouds for each mental health class
+create_wordcloud(paste(anxiety$post, collapse = " "), "Anxiety Word Cloud")
+create_wordcloud(paste(bipolar$post, collapse = " "), "Bipolar Word Cloud")
+create_wordcloud(paste(EDA$post, collapse = " "), "EDA Word Cloud")
+create_wordcloud(paste(ptsd$post, collapse = " "), "PTSD Word Cloud")
+create_wordcloud(paste(data$post, collapse = " "), " Word Cloud")
+
+
+
+
+# Function to plot the most frequent words
+plot_most_frequent_words <- function(text_data, title) {
+  words <- unlist(strsplit(text_data, " "))
+  words_df <- data.frame(table(words))
+  words_df <- words_df[order(-words_df$Freq), ]
+  top_words <- head(words_df, 15)
+  
+  barplot(top_words$Freq, names.arg = top_words$words, las = 2, col = brewer.pal(8, "Dark2"), main = title)
+}
+
+
+
+
+# Plot the most frequent words for each mental health class
+plot_most_frequent_words(paste(anxiety$post, collapse = " "), "Top Words in Anxiety Posts")
+plot_most_frequent_words(paste(bipolar$post, collapse = " "), "Top Words in Bipolar Posts")
+plot_most_frequent_words(paste(EDA$post, collapse = " "), "Top Words in EDA Posts")
+plot_most_frequent_words(paste(ptsd$post, collapse = " "), "Top Words in PTSD Posts")
+plot_most_frequent_words(paste(data$post, collapse = " "), "Top Words in All Posts")
+
+
+
+# Function to plot the most frequent words
+plot_most_frequent_words <- function(text_data, title, top_n = 15) {
+  words <- unlist(strsplit(text_data, " "))
+  words_df <- data.frame(table(words))
+  words_df <- words_df[order(-words_df$Freq), ]
+  top_words <- head(words_df, top_n)
+  
+  # Plotting with ggplot2
+  ggplot(top_words, aes(x = reorder(words, -Freq), y = Freq)) +
+    geom_bar(stat = "identity", fill = brewer.pal(8, "Dark2")[3]) +
+    labs(title = title, x = "Words", y = "Frequency") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
+# Plot the most frequent words for each mental health class
+plot_most_frequent_words(paste(anxiety$post, collapse = " "), "Top Words in Anxiety Posts", top_n = 20)
+plot_most_frequent_words(paste(bipolar$post, collapse = " "), "Top Words in Bipolar Posts", top_n = 20)
+plot_most_frequent_words(paste(EDA$post, collapse = " "), "Top Words in EDA Posts", top_n =20)
+plot_most_frequent_words(paste(ptsd$post, collapse = " "), "Top Words in PTSD Posts", top_n = 20)
+plot_most_frequent_words(paste(data$post, collapse = " "), "Top Words in All Posts", top_n = 20)
+
+
+
+
+
+# Create a corpus
+corpus <- Corpus(VectorSource(data$post))
+
+# Create a Document-Term Matrix (DTM) with TF-IDF weighting
+dtm <- DocumentTermMatrix(corpus, control = list(weighting = weightTfIdf, stopwords = TRUE, removePunctuation = TRUE, removeNumbers = TRUE))
+
+
+
+# Reduce the dimensionality by keeping only the most frequent terms
+# Let's keep terms that appear in at least 0.1% of the documents
+sparse_dtm <- removeSparseTerms(dtm, 0.99)
+
+# Convert the sparse DTM to a matrix
+data_matrix <- as.matrix(sparse_dtm)
+
+# Add the class labels to the matrix
+data_matrix <- cbind(data_matrix, subreddit = data$subreddit)
+
+
+# Convert the data matrix to a data frame
+data_df <- as.data.frame(data_matrix) # 12207 rows 848 features (token/coloumns)
+any_na <- any(is.na(data_df))
+print(any_na)  
+#false
+
+
+#Initialize the new class labels based on observation ranges
+data_df$new_subreddit <- NA
+
+# Assign classes based on observation ranges
+data_df$new_subreddit[1:1368] <- "bipolar"
+data_df$new_subreddit[1369:6410] <- "EDA"
+data_df$new_subreddit[6411:10148] <- "anxiety"
+data_df$new_subreddit[10149:12207] <- "ptsd"
+# Convert the new_subreddit column to a factor
+data_df$new_subreddit <- factor(data_df$new_subreddit, levels = c("bipolar", "EDA", "anxiety", "ptsd"))
+
+# Verify the changes
+print(table(data_df$new_subreddit))
+
+# Check for any NA values in the new column
+any_na <- any(is.na(data_df$new_subreddit))
+print(any_na)  # false
+
+# Check the structure of the data frame to confirm the changes
+str(data_df)
+
+# Replace the original subreddit column with the new one
+data_df$subreddit <- data_df$new_subreddit
+data_df$new_subreddit <- NULL  # Remove the temporary column if no longer needed
+
+
+# Convert all columns except 'subreddit' to numeric
+data_df[-which(names(data_df) == "subreddit")] <- lapply(data_df[-which(names(data_df) == "subreddit")], as.numeric)
+
+# Ensure the target column remains a factor
+data_df$subreddit <- factor(data_df$subreddit)
+any_na <- any(is.na(data_df))
+print(any_na)
+#false
+
+# Check the structure to confirm all features are numeric
+str(data_df)
+str(data_df$subreddit)
+
+
+
+###Naive Bayes 
+
+# Define control for cross-validation
+cv_control <- trainControl(method = "cv", number = 5, classProbs = TRUE, summaryFunction = multiClassSummary)
+
+
+# Split data into training and testing sets
+set.seed(123)
+train_index <- createDataPartition(data_df$subreddit, p = 0.8, list = FALSE)
+train_data <- data_df[train_index, ]
+test_data <- data_df[-train_index, ]
+
+# Calculate class weights
+class_counts <- table(train_data$subreddit)
+class_weights <- 1 / class_counts
+class_weights <- class_weights / sum(class_weights)
+
+class_weights
+
+# Build the Naive Bayes model with class weights
+model_Nb <- naiveBayes(subreddit ~ ., data = train_data, laplace = 1, prior = class_weights, trControl = cv_control)
+
+# Make predictions on the test set
+predictions <- predict(model_Nb, test_data)
+
+# Confusion matrix
+conf_matrix <- confusionMatrix(predictions, test_data$subreddit)
+print(conf_matrix)
+
+
+
+by_class <- conf_matrix$byClass
+
+# Calculate F1 score for each class
+f1_scores <- sapply(1:nrow(by_class), function(i) {
+  precision <- by_class[i, "Pos Pred Value"]
+  recall <- by_class[i, "Sensitivity"]
+  f1 <- 2 * (precision * recall) / (precision + recall)
+  return(f1)
+})
+
+# Calculate the average F1 score across all classes
+avg_f1_score <- mean(f1_scores, na.rm = TRUE)
+
+# Print average F1 score
+print(paste("Average F1 Score:", avg_f1_score)) #0.60
+
+
+
+### SVM
+
+# Function to sample subsets
+sample_data <- function(data, size) {
+  sampled_index <- sample(seq_len(nrow(data)), size)
+  return(data[sampled_index, ])
+}
+
+# Define sample sizes
+sample_size_train <- 1000
+sample_size_test <- 200
+
+# Sample subsets from the training and testing data
+train_data_sampled <- sample_data(train_data, sample_size_train)
+test_data_sampled <- sample_data(test_data, sample_size_test)
+
+# Re-calculate class weights for the sampled training data
+class_counts_sampled <- table(train_data_sampled$subreddit)
+class_weights_sampled <- class_counts_sampled / sum(class_counts_sampled)
+weights_sampled <- 1 / class_weights_sampled
+
+# SVM with class weights on sampled data
+svm_model_sampled <- svm(subreddit ~ ., data = train_data_sampled, 
+                         class.weights = weights_sampled,
+                         kernel = "linear",
+                         probability = TRUE)
+
+# Make predictions on the sampled test set
+svm_predictions_sampled <- predict(svm_model_sampled, test_data_sampled, probability = TRUE)
+
+# Confusion matrix for sampled SVM model
+svm_conf_matrix_sampled <- confusionMatrix(svm_predictions_sampled, test_data_sampled$subreddit)
+print(svm_conf_matrix_sampled)
+
+
+
+
+
+# whole data
+
+
+class_counts_full <- table(train_data$subreddit)
+class_weights_full <- class_counts_full / sum(class_counts_full)
+weights_full <- 1 / class_weights_full
+
+# SVM with class weights on full data
+svm_model_full <- svm(subreddit ~ ., data = train_data, 
+                      class.weights = weights_full,
+                      kernel = "linear",
+                      probability = TRUE)
+
+# Make predictions on the full test set
+svm_predictions_full <- predict(svm_model_full, test_data, probability = TRUE)
+
+# Confusion matrix for full SVM model
+svm_conf_matrix_full <- confusionMatrix(svm_predictions_full, test_data$subreddit)
+print(svm_conf_matrix_full)
+
+
+
+
+
+### Neural Network Model ###
+# Train the Neural Network model
+nn_model <- train(subreddit ~ ., 
+                  data = train_data_sampled, 
+                  method = "nnet",
+                  trControl = control,
+                  trace = FALSE, 
+                  linout = TRUE)
+
+# Make predictions on the sampled test set
+nn_predictions <- predict(nn_model, test_data_sampled)
+
+# Confusion matrix for Neural Network model
+nn_conf_matrix <- confusionMatrix(nn_predictions, test_data_sampled$subreddit)
+print(nn_conf_matrix)
+
+# Train the Neural Network model on the full dataset
+nn_model_full <- train(subreddit ~ ., 
+                       data = train_data, 
+                       method = "nnet",
+                       trace = FALSE, 
+                       linout = TRUE)
+
+
+
+
+
+# Make predictions on the full test set
+nn_predictions_full <- predict(nn_model_full, test_data)
+
+# Confusion matrix for full Neural Network model
+nn_conf_matrix_full <- confusionMatrix(nn_predictions_full, test_data$subreddit)
+print(nn_conf_matrix_full)
+
+
+
+
+# Convert the target variable to numeric
+train_data$subreddit <- as.numeric(train_data$subreddit) - 1
+test_data$subreddit <- as.numeric(test_data$subreddit) - 1
+
+# Build the XGBoost model
+set.seed(123)  # For reproducibility
+xgb_model <- train(subreddit ~ ., data = train_data, 
+                   method = "xgbTree", 
+                   trControl = cv_control,
+                   tuneLength = 3)  # You can increase tuneLength for better tuning
+
+# Make predictions on the test set
+xgb_predictions <- predict(xgb_model, test_data)
+
+# Convert predictions back to factor
+xgb_predictions <- factor(xgb_predictions, levels = 0:3, labels = c("bipolar", "EDA", "anxiety", "ptsd"))
+
+# Confusion matrix
+xgb_conf_matrix <- confusionMatrix(xgb_predictions, test_data$subreddit)
+print(xgb_conf_matrix)
+
+
+
+
+
+
+
+
+
+
+
+
+#Logistic Regression
+
+
+# Define control for cross-validation
+cv_control <- trainControl(method = "cv", number = 5, classProbs = TRUE, summaryFunction = multiClassSummary)
+
+# Build the logistic regression model
+log_model <- train(subreddit ~ ., data = train_data, 
+                   method = "multinom",  # Multinomial logistic regression
+                   )
+
+# Make predictions on the test set
+log_predictions <- predict(log_model, test_data)
+
+# Confusion matrix
+log_conf_matrix <- confusionMatrix(log_predictions, test_data$subreddit)
+print(log_conf_matrix)
+
+
+library(gbm)
+# Build the GBM model
+set.seed(123)  # For reproducibility
+gbm_model <- train(subreddit ~ ., data = train_data, 
+                   method = "gbm", 
+                   verbose = FALSE)
+
+# Make predictions on the test set
+gbm_predictions <- predict(gbm_model, test_data)
+
+# Confusion matrix
+gbm_conf_matrix <- confusionMatrix(gbm_predictions, test_data$subreddit)
+print(gbm_conf_matrix)
+
+
+
+
+
+
+
+
+
+#################333333333333333333333333333333333333333333333333###33#####3
+
+
+install.packages("text2vec")
+
+library(text2vec)
+
+# Create an iterator over the tokens
+it <- itoken(data$post, 
+             preprocessor = identity, 
+             tokenizer = word_tokenizer, 
+             ids = data$subreddit, 
+             progressbar = FALSE)
+
+# Create a vocabulary object
+vocab <- create_vocabulary(it)
+vectorizer <- vocab_vectorizer(vocab)
+
+# Create a document-term matrix
+dtm <- create_dtm(it, vectorizer)
+
+# Train the Doc2Vec model
+doc2vec_model <- text2vec::doc2vec(dtm, type = "PV-DBOW", epochs = 20, lr = 0.025, threads = 1)
+
+# Get the document vectors
+doc_vectors <- as.data.frame(doc2vec_model$documents)
+
+# Add the class labels to the matrix
+data_matrix <- doc_vectors
+data_matrix$subreddit <- data$subreddit
+
+# Split data into training and testing sets
+set.seed(123)
+train_index <- createDataPartition(data_matrix$subreddit, p = 0.8, list = FALSE)
+train_data <- data_matrix[train_index, ]
+test_data <- data_matrix[-train_index, ]
+
+
+
+
+
+
+
+
+
+
+
+
+## Initialize and train Word2Vec models
+vecs = textTinyR::WORD2VEC(text_vector = data$post, 
+                           vector_size = 100, 
+                           window_size = 10, 
+                           min_count = 1, 
+                           epochs = 20, 
+                           threads = 1, 
+                           negative_samples = 5, 
+                           learning_rate = 0.025, 
+                           threshold_alpha = 0.0001, 
+                           plot_graph = FALSE)
+
+# Extract word vectors
+word_vectors = vecs$WORD2VEC_matrix
+
+# Create a function to average word vectors for each document
+average_word_vectors <- function(text, word_vectors, vocabulary) {
+  words <- unlist(strsplit(text, " "))
+  valid_words <- words[words %in% vocabulary]
+  if (length(valid_words) == 0) {
+    return(rep(0, ncol(word_vectors)))  # Return a zero vector if no valid words are found
+  }
+  word_vecs <- word_vectors[valid_words, , drop = FALSE]
+  doc_vec <- colMeans(word_vecs, na.rm = TRUE)
+  return(doc_vec)
+}
+
+# Get the vocabulary from the word vectors
+vocabulary <- rownames(word_vectors)
+
+# Create document vectors by averaging word vectors
+doc_vectors <- t(sapply(data$post, average_word_vectors, word_vectors, vocabulary))
+
+# Add the class labels to the matrix
+data_matrix <- as.data.frame(doc_vectors)
+data_matrix$subreddit <- data$subreddit
+
+# Split data into training and testing sets
+set.seed(123)
+train_index <- createDataPartition(data_matrix$subreddit, p = 0.8, list = FA)
+                                   
+
+
+
+
+#BİLDİRİ
+
+new_data<-rbind(bipolar,dep)
+new_data$post <- sapply(new_data$post, preprocess_text)
+corpus <- Corpus(VectorSource(new_data$post))
+
+# Create a Document-Term Matrix (DTM) with TF-IDF weighting
+dtm <- DocumentTermMatrix(corpus, control = list(weighting = weightTfIdf, stopwords = TRUE, removePunctuation = TRUE, removeNumbers = TRUE))
+
+
+
+
+
+
+
+# Reduce the dimensionality by keeping only the most frequent terms
+# Let's keep terms that appear in at least 0.1% of the documents
+
+
+sparse_dtm_99 <- removeSparseTerms(dtm, 0.99)
+sparse_dtm_98 <- removeSparseTerms(dtm, 0.98)
+sparse_dtm_97 <- removeSparseTerms(dtm, 0.97)
+
+# Check the number of terms remaining
+cat("Terms remaining at 0.99 sparsity: ", ncol(sparse_dtm_99), "\n") #954
+cat("Terms remaining at 0.98 sparsity: ", ncol(sparse_dtm_98), "\n") #556
+cat("Terms remaining at 0.97 sparsity: ", ncol(sparse_dtm_97), "\n") #380
+
+# Inspect the first few terms at each sparsity level
+inspect(sparse_dtm_99[1:5, 1:5])
+inspect(sparse_dtm_98[1:5, 1:5]) #try it
+inspect(sparse_dtm_97[1:5, 1:5])
+
+
+
+
+# Convert the sparse DTM to a matrix
+data_matrix <- as.matrix(sparse_dtm_99)
+
+# Add the class labels to the matrix
+data_matrix <- cbind(data_matrix, subreddit = new_data$subreddit)
+
+
+# Convert the data matrix to a data frame
+data_df <- as.data.frame(data_matrix) # 9165 rows 947 features (token/coloumns)
+any_na <- any(is.na(data_df))
+print(any_na)  
+
+
+#Initialize the new class labels based on observation ranges
+new_data$new_subreddit <- NA
+
+# Assign classes based on observation ranges
+data_df$new_subreddit[1:1368] <- "bipolar"
+data_df$new_subreddit[1369:3368] <- "dep"
+
+# Convert the new_subreddit column to a factor
+data_df$new_subreddit <- factor(data_df$new_subreddit, levels = c("bipolar", "dep"))
+
+# Verify the changes
+print(table(data_df$new_subreddit))
+
+# Check for any NA values in the new column
+any_na <- any(is.na(data_df$new_subreddit))
+print(any_na)  # false
+
+# Check the structure of the data frame to confirm the changes
+str(data_df)
+
+# Replace the original subreddit column with the new one
+data_df$subreddit <- data_df$new_subreddit
+data_df$new_subreddit <- NULL  # Remove the temporary column if no longer needed
+
+
+# Convert all columns except 'subreddit' to numeric
+data_df[-which(names(data_df) == "subreddit")] <- lapply(data_df[-which(names(data_df) == "subreddit")], as.numeric)
+
+# Ensure the target column remains a factor
+data_df$subreddit <- factor(data_df$subreddit)
+any_na <- any(is.na(data_df))
+print(any_na)
+#false
+
+# Check the structure to confirm all features are numeric
+str(data_df)
+str(data_df$subreddit)
+
+
+
+
+
+# Split data into training and testing sets
+set.seed(123)
+train_index <- createDataPartition(data_df$subreddit, p = 0.8, list = FALSE)
+train_data <- data_df[train_index, ]
+test_data <- data_df[-train_index, ]
+
+
+
+# Build the Naive Bayes model with class weights
+model_Nb <- naiveBayes(subreddit ~ ., data = train_data, laplace = 1)
+
+# Make predictions on the test set
+predictions <- predict(model_Nb, test_data)
+
+# Confusion matrix
+conf_matrix <- confusionMatrix(predictions, test_data$subreddit)
+print(conf_matrix)
+
+precision_nb <- conf_matrix$byClass['Pos Pred Value']
+recall_nb <- conf_matrix$byClass['Sensitivity']
+f1_score_nb <- 2 * ((precision_nb * recall_nb) / (precision_nb + recall_nb))
+
+cat("Naive Bayes Precision: ", precision_nb, "\n")
+cat("Naive Bayes F1 Score: ", f1_score_nb, "\n")
+
+
+#SVM 
+svm_model_full <- svm(subreddit ~ ., data = train_data, 
+                      
+                      kernel = "linear",
+                      probability = TRUE)
+
+# Make predictions on the full test set
+svm_predictions_full <- predict(svm_model_full, test_data, probability = TRUE)
+
+# Confusion matrix for full SVM model
+svm_conf_matrix_full <- confusionMatrix(svm_predictions_full, test_data$subreddit)
+print(svm_conf_matrix_full) #76
+
+
+precision_svm <- svm_conf_matrix_full$byClass['Pos Pred Value']
+recall_svm <- svm_conf_matrix_full$byClass['Sensitivity']
+f1_score_svm <- 2 * ((precision_svm * recall_svm) / (precision_svm + recall_svm))
+
+cat("SVM Precision: ", precision_svm, "\n")
+cat("SVM F1 Score: ", f1_score_svm, "\n")
+
+
+
+# Logistic Regression modelini oluştur
+logistic_model <- train(subreddit ~ ., data = train_data, method = "glm", family = "binomial")
+
+# Test seti üzerinde tahminler yap
+logistic_predictions <- predict(logistic_model, test_data)
+
+# Confusion matrix ve diğer metrikleri hesapla
+logistic_conf_matrix <- confusionMatrix(logistic_predictions, test_data$subreddit)
+print(logistic_conf_matrix)
+
+# Precision ve F1 Score hesaplama
+precision_logistic <- logistic_conf_matrix$byClass['Pos Pred Value']
+recall_logistic <- logistic_conf_matrix$byClass['Sensitivity']
+f1_score_logistic <- 2 * ((precision_logistic * recall_logistic) / (precision_logistic + recall_logistic))
+
+cat("Logistic Regression Precision: ", precision_logistic, "\n")
+cat("Logistic Regression F1 Score: ", f1_score_logistic, "\n")
+library(rpart)
+# Decision Tree modelini oluştur
+tree_model <- rpart(subreddit ~ ., data = train_data, method = "class")
+
+# Test seti üzerinde tahminler yap
+tree_predictions <- predict(tree_model, test_data, type = "class")
+
+# Confusion matrix ve diğer metrikleri hesapla
+tree_conf_matrix <- confusionMatrix(tree_predictions, test_data$subreddit)
+print(tree_conf_matrix)
+
+# Precision ve F1 Score hesaplama
+precision_tree <- tree_conf_matrix$byClass['Pos Pred Value']
+recall_tree <- tree_conf_matrix$byClass['Sensitivity']
+f1_score_tree <- 2 * ((precision_tree * recall_tree) / (precision_tree + recall_tree))
+
+cat("Decision Tree Precision: ", precision_tree, "\n")
+cat("Decision Tree F1 Score: ", f1_score_tree, "\n")
+
+
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+
+# Create data frame for nodes
+nodes <- data.frame(
+  id = c("w(t-2)", "w(t-1)", "w(t+1)", "w(t+2)", "SUM", "w(t)", 
+         "w(t)_skip", "w(t-2)_skip", "w(t-1)_skip", "w(t+1)_skip", "w(t+2)_skip"),
+  x = c(1, 1, 1, 1, 2, 3, 2, 3, 3, 3, 3),
+  y = c(4, 3, 2, 1, 2.5, 2.5, 5, 4, 3, 2, 1),
+  label = c("w(t-2)", "w(t-1)", "w(t+1)", "w(t+2)", "SUM", "w(t)",
+            "w(t)", "w(t-2)", "w(t-1)", "w(t+1)", "w(t+2)")
+)
+
+# Create data frame for edges
+edges <- data.frame(
+  from = c("w(t-2)", "w(t-1)", "w(t+1)", "w(t+2)", 
+           "SUM", "w(t)_skip", "w(t)_skip", "w(t)_skip", "w(t)_skip"),
+  to = c("SUM", "SUM", "SUM", "SUM", 
+         "w(t)", "w(t-2)_skip", "w(t-1)_skip", "w(t+1)_skip", "w(t+2)_skip")
+)
+
+# Plot nodes and edges
+ggplot() +
+  geom_segment(data = edges, aes(x = nodes$x[match(from, nodes$id)], 
+                                 y = nodes$y[match(from, nodes$id)],
+                                 xend = nodes$x[match(to, nodes$id)], 
+                                 yend = nodes$y[match(to, nodes$id)]),
+               arrow = arrow(length = unit(0.2, "cm")), color = "black") +
+  geom_point(data = nodes, aes(x = x, y = y), shape = 22, size = 5, fill = "white") +
+  geom_text(data = nodes, aes(x = x, y = y, label = label), vjust = -1) +
+  theme_void() +
+  ggtitle("CBOW and Skip-gram Models") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# Save the plot to a file
+ggsave("modified_visual.png", width = 8, height = 4)
+
+
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+
+# Create data frame for nodes
+nodes <- data.frame(
+  id = c("w(t-2)", "w(t-1)", "w(t+1)", "w(t+2)", "SUM", "w(t)", 
+         "w(t)_skip", "w(t-2)_skip", "w(t-1)_skip", "w(t+1)_skip", "w(t+2)_skip"),
+  x = c(1, 1, 1, 1, 2, 3, 2, 3, 3, 3, 3),
+  y = c(4, 3, 2, 1, 2.5, 2.5, 5, 4, 3, 2, 1),
+  label = c("w(t-2)", "w(t-1)", "w(t+1)", "w(t+2)", "SUM", "w(t)",
+            "w(t)", "w(t-2)", "w(t-1)", "w(t+1)", "w(t+2)"),
+  color = c("red", "red", "red", "red", "blue", "green", 
+            "blue", "green", "green", "green", "green")
+)
+
+# Create data frame for edges
+edges <- data.frame(
+  from = c("w(t-2)", "w(t-1)", "w(t+1)", "w(t+2)", 
+           "SUM", "w(t)_skip", "w(t)_skip", "w(t)_skip", "w(t)_skip"),
+  to = c("SUM", "SUM", "SUM", "SUM", 
+         "w(t)", "w(t-2)_skip", "w(t-1)_skip", "w(t+1)_skip", "w(t+2)_skip")
+)
+
+# Plot nodes and edges
+ggplot() +
+  geom_segment(data = edges, aes(x = nodes$x[match(from, nodes$id)], 
+                                 y = nodes$y[match(from, nodes$id)],
+                                 xend = nodes$x[match(to, nodes$id)], 
+                                 yend = nodes$y[match(to, nodes$id)]),
+               arrow = arrow(length = unit(0.2, "cm")), color = "black") +
+  geom_point(data = nodes, aes(x = x, y = y, fill = color), shape = 21, size = 5) +
+  geom_text(data = nodes, aes(x = x, y = y, label = label), vjust = -1) +
+  theme_void() +
+  ggtitle("CBOW and Skip-gram Models") +
+  theme(plot.title = element_text(hjust = 0.5),legend.position = "none")
+
+# Save the plot to a file
+ggsave("modified_visual.png", width = 8, height = 4)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Load necessary libraries
+library(ggplot2)
+library(dplyr)
+
+# Create data frame for nodes
+nodes <- data.frame(
+  id = c("w(t-2)", "w(t-1)", "w(t+1)", "w(t+2)", "SUM", "w(t)", 
+         "w(t)_skip", "w(t-2)_skip", "w(t-1)_skip", "w(t+1)_skip", "w(t+2)_skip"),
+  x = c(1, 1, 1, 1, 2, 3, 2, 3, 3, 3, 3),
+  y = c(4, 3, 2, 1, 2.5, 2.5, 5, 4, 3, 2, 1),
+  label = c("w(t-2)", "w(t-1)", "w(t+1)", "w(t+2)", "SUM", "w(t)",
+            "w(t)", "w(t-2)", "w(t-1)", "w(t+1)", "w(t+2)")
+)
+
+# Create data frame for edges
+edges <- data.frame(
+  from = c("w(t-2)", "w(t-1)", "w(t+1)", "w(t+2)", 
+           "SUM", "w(t)_skip", "w(t)_skip", "w(t)_skip", "w(t)_skip"),
+  to = c("SUM", "SUM", "SUM", "SUM", 
+         "w(t)", "w(t-2)_skip", "w(t-1)_skip", "w(t+1)_skip", "w(t+2)_skip")
+)
+
+# Plot nodes and edges
+ggplot() +
+  geom_segment(data = edges, aes(x = nodes$x[match(from, nodes$id)], 
+                                 y = nodes$y[match(from, nodes$id)],
+                                 xend = nodes$x[match(to, nodes$id)], 
+                                 yend = nodes$y[match(to, nodes$id)]),
+               arrow = arrow(length = unit(0.2, "cm")), color = "black") +
+  geom_point(data = nodes, aes(x = x, y = y, 
+                               fill = factor(c(rep("red", 4), "blue", "green", "blue", rep("green", 4)))),
+             shape = 21, size = 5) +
+  geom_text(data = nodes, aes(x = x, y = y, label = label), vjust = -1) +
+  scale_fill_manual(values = c("red" = "red", "blue" = "blue", "green" = "green")) +
+  geom_text(aes(x = 2, y = 0.5, label = "CBOW"), color = "blue", vjust = 1, hjust = 0.5) +
+  geom_text(aes(x = 3, y = 0.5, label = "Skip-gram"), color = "green", vjust = 1, hjust = 0.5) +
+  theme_void() +
+  theme(legend.position = "none")
+
+# Save the plot to a file
+ggsave("modified_visual.png", width = 8, height = 4)
+
+
+
+
+
+# Örnek metrikler (örnek verilerle yer değiştirmelisiniz)
+# Naive Bayes
+nb_accuracy <- 0.75
+nb_weighted_precision <- 0.70
+nb_weighted_recall <- 0.72
+nb_weighted_F1_Score <- 0.71
+
+# SVM
+svm_accuracy <- 0.78
+svm_weighted_precision <- 0.76
+svm_weighted_recall <- 0.77
+svm_weighted_F1_Score <- 0.76
+
+# Neural Network
+nn_accuracy <- 0.80
+nn_weighted_precision <- 0.79
+nn_weighted_recall <- 0.80
+nn_weighted_F1_Score <- 0.79
+
+# XGBoost
+xgb_accuracy <- 0.82
+xgb_weighted_precision <- 0.81
+xgb_weighted_recall <- 0.82
+xgb_weighted_F1_Score <- 0.81
+
+# Metrikleri bir veri çerçevesine koyun
+metrics_comparison <- data.frame(
+  Model = rep(c("Naive Bayes", "SVM", "Neural Network", "XGBoost"), each = 4),
+  Metric = rep(c("Accuracy", "Weighted Precision", "Weighted Recall", "Weighted F1 Score"), times = 4),
+  Value = c(
+    nb_accuracy, nb_weighted_precision, nb_weighted_recall, nb_weighted_F1_Score,
+    svm_accuracy, svm_weighted_precision, svm_weighted_recall, svm_weighted_F1_Score,
+    nn_accuracy, nn_weighted_precision, nn_weighted_recall, nn_weighted_F1_Score,
+    xgb_accuracy, xgb_weighted_precision, xgb_weighted_recall, xgb_weighted_F1_Score
+  )
+)
+
+# Çubuk grafiği oluşturun
+ggplot(metrics_comparison, aes(x = Metric, y = Value, fill = Model)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  labs(title = "Model Performance Comparison", x = "Metric", y = "Value") +
+  theme_minimal() +
+  scale_fill_manual(values = c("Naive Bayes" = "blue", "SVM" = "green", "Neural Network" = "purple", "XGBoost" = "orange")) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Load necessary libraries
+library(ggplot2)
+
+# Create a sample dataset
+set.seed(123)
+n <- 20
+x1 <- rnorm(n)
+x2 <- rnorm(n)
+class <- factor(sample(c("Class 1", "Class 2"), n, replace = TRUE))
+
+# Create a data frame
+data <- data.frame(x1 = c(x1, x1 + 2), x2 = c(x2, x2 + 2), class = factor(rep(c("Class 1", "Class 2"), each = n)))
+
+# Fit a linear model
+model <- glm(class ~ x1 + x2, data = data, family = binomial)
+coef <- coef(model)
+
+# Define the decision boundary
+intercept <- -coef[1] / coef[3]
+slope <- -coef[2] / coef[3]
+x_vals <- seq(min(data$x1), max(data$x1), length.out = 100)
+y_vals <- slope * x_vals + intercept
+
+# Plot the data
+ggplot(data, aes(x = x1, y = x2, color = class)) +
+  geom_point(aes(shape = class), size = 3) +
+  geom_abline(intercept = intercept, slope = slope, linetype = "solid", color = "black") +
+  geom_abline(intercept = intercept + 1, slope = slope, linetype = "dashed", color = "black") +
+  geom_abline(intercept = intercept - 1, slope = slope, linetype = "dashed", color = "black") +
+  labs(x = expression(X[1]), y = expression(X[2])) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+# Gerekli paketleri yükleyin
+library(ggplot2)
+
+# Örnek bir veri seti oluşturun
+set.seed(123)
+n <- 20
+x1 <- c(rnorm(n, mean = 1), rnorm(n, mean = 2))
+x2 <- c(rnorm(n, mean = 2), rnorm(n, mean = 3))
+class <- factor(c(rep("Class 1", n), rep("Class 2", n)))
+
+# Veri çerçevesi oluşturun
+data <- data.frame(x1 = x1, x2 = x2, class = class)
+
+# Model için bir doğrusal ayrım çizgisi belirleyin
+intercept <- 1
+slope <- 1
+x_vals <- seq(min(data$x1), max(data$x1), length.out = 100)
+y_vals <- slope * x_vals + intercept
+
+# Veriyi ve ayrım çizgisini çizin
+ggplot(data, aes(x = x1, y = x2, color = class)) +
+  geom_point(aes(shape = class), size = 3) +
+  geom_abline(intercept = intercept, slope = slope, linetype = "solid", color = "black") +
+  geom_abline(intercept = intercept + 1, slope = slope, linetype = "dashed", color = "black") +
+  geom_abline(intercept = intercept - 1, slope = slope, linetype = "dashed", color = "black") +
+  labs(x = expression(X[1]), y = expression(X[2])) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+
+# Gerekli paketleri yükleyin
+library(ggplot2)
+
+# Örnek bir veri seti oluşturun
+set.seed(123)
+n <- 20
+x1 <- c(rnorm(n, mean = 1), rnorm(n, mean = 2))
+x2 <- c(rnorm(n, mean = 2), rnorm(n, mean = 3))
+class <- factor(c(rep("Class 1", n), rep("Class 2", n)))
+
+# Veri çerçevesi oluşturun
+data <- data.frame(x1 = x1, x2 = x2, class = class)
+
+# Model için bir doğrusal ayrım çizgisi belirleyin
+intercept <- 1
+slope <- 1
+x_vals <- seq(min(data$x1), max(data$x1), length.out = 100)
+y_vals <- slope * x_vals + intercept
+
+# Veriyi ve ayrım çizgisini çizin-ggplot(data, aes(x = x1, y = x2, color = class, shape = class)) +
+  geom_point(size = 3) +
+  geom_abline(intercept = intercept, slope = slope, linetype = "solid", color = "black", size = 0.8) +
+  geom_abline(intercept = intercept + 1, slope = slope, linetype = "dashed", color = "black", size = 0.8) +
+  geom_abline(intercept = intercept - 1, slope = slope, linetype = "dashed", color = "black", size = 0.8) +
+  scale_color_manual(values = c("Class 1" = "purple", "Class 2" = "dark red")) +
+  scale_shape_manual(values = c(17, 16)) +  # 17: triangle, 15: square
+  labs(x = expression(X[1]), y = expression(X[2])) +
+  theme_minimal() +
+  theme(legend.position = "none")
+ 
+
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  
+  # Load necessary library
+  library(ggplot2)
+  
+  # Örnek bir veri seti oluşturun
+  set.seed(123)
+  n <- 20
+  x1 <- c(rnorm(n, mean = 1), rnorm(n, mean = 2))
+  x2 <- c(rnorm(n, mean = 2), rnorm(n, mean = 3))
+  class <- factor(c(rep("Class 1", n), rep("Class 2", n)))
+  
+  # Veri çerçevesi oluşturun
+  data <- data.frame(x1 = x1, x2 = x2, class = class)
+  
+  # Model için bir doğrusal ayrım çizgisi belirleyin
+  intercept <- 1
+  slope <- 1
+  
+  # Veriyi ve ayrım çizgisini çizin
+  p <- ggplot(data, aes(x = x1, y = x2, color = class, shape = class)) +
+    geom_point(size = 3) +
+    geom_abline(intercept = intercept, slope = slope, linetype = "solid", color = "black", size = 0.8) +
+    geom_abline(intercept = intercept + 1, slope = slope, linetype = "dashed", color = "black", size = 0.8) +
+    geom_abline(intercept = intercept - 1, slope = slope, linetype = "dashed", color = "black", size = 0.8) +
+    scale_color_manual(values = c("Class 1" = "purple", "Class 2" = "dark red")) +
+    scale_shape_manual(values = c(17, 16)) +  # 17: triangle, 16: circle
+    labs(x = expression(X[1]), y = expression(X[2])) +
+    theme_minimal() +
+    theme(
+      legend.position = "none",
+      axis.line = element_blank(), 
+      panel.grid = element_blank(),
+      axis.ticks = element_blank(),
+      axis.title.x = element_text(size = 16),
+      axis.title.y = element_text(size = 16),
+      axis.text.x = element_text(size = 14),
+      axis.text.y = element_text(size = 14)
+    )
+  
+  p
+  # Print the plot
+  print(p)
+  
+  
+  
+  
+  
+  
+
+# Gerekli paketleri yükleyin
+library(ggplot2)
+
+# Örnek bir veri seti oluşturun
+set.seed(123)
+n <- 20
+x1 <- c(rnorm(n, mean = 1), rnorm(n, mean = 3))
+x2 <- c(rnorm(n, mean = 2), rnorm(n, mean = 4))
+class <- factor(c(rep("Class 1", n), rep("Class 2", n)))
+
+# Veri çerçevesi oluşturun
+data <- data.frame(x1 = x1, x2 = x2, class = class)
+
+# Model için bir doğrusal ayrım çizgisi belirleyin
+intercept <- 2
+slope <- 1
+x_vals <- seq(min(data$x1), max(data$x1), length.out = 100)
+y_vals <- slope * x_vals + intercept
+
+# Veriyi ve ayrım çizgisini çizin
+ggplot(data, aes(x = x1, y = x2, color = class, shape = class)) +
+  geom_point(size = 3) +
+  geom_abline(intercept = intercept, slope = slope, linetype = "solid", color = "black", size = 0.8) +
+  geom_abline(intercept = intercept + 1, slope = slope, linetype = "dashed", color = "black", size = 0.8) +
+  geom_abline(intercept = intercept - 1, slope = slope, linetype = "dashed", color = "black", size = 0.8) +
+  scale_color_manual(values = c("Class 1" = "purple", "Class 2" = "dark red")) +
+  scale_shape_manual(values = c(17, 16)) +  # 17: triangle, 16: circle
+  labs(x = expression(X[1]), y = expression(X[2])) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# Gerekli paketleri yükleyin
+library(ggplot2)
+
+# Örnek bir veri seti oluşturun
+set.seed(123)
+n <- 20
+x1 <- c(rnorm(n, mean = 1), rnorm(n, mean = 3))
+x2 <- c(rnorm(n, mean = 2), rnorm(n, mean = 4))
+class <- factor(c(rep("Class 1", n), rep("Class 2", n)))
+
+# Veri çerçevesi oluşturun
+data <- data.frame(x1 = x1, x2 = x2, class = class)
+
+# Sınıf ortalamalarını hesaplayın
+mean_class1 <- colMeans(data[data$class == "Class 1", c("x1", "x2")])
+mean_class2 <- colMeans(data[data$class == "Class 2", c("x1", "x2")])
+
+# Doğrusal ayrım çizgisi için kesişim noktası ve eğim
+slope <- (mean_class2[2] - mean_class1[2]) / (mean_class2[1] - mean_class1[1])
+intercept <- mean_class1[2] - slope * mean_class1[1]
+
+# Veriyi ve ayrım çizgisini çizin
+ggplot(data, aes(x = x1, y = x2, color = class, shape = class)) +
+  geom_point(size = 3) +
+  geom_abline(intercept = intercept, slope = slope, linetype = "solid", color = "black", size = 0.8) +
+  geom_abline(intercept = intercept + 1, slope = slope, linetype = "dashed", color = "black", size = 0.8) +
+  geom_abline(intercept = intercept - 1, slope = slope, linetype = "dashed", color = "black", size = 0.8) +
+  scale_color_manual(values = c("Class 1" = "purple", "Class 2" = "dark red")) +
+  scale_shape_manual(values = c(17, 16)) +  # 17: triangle, 16: circle
+  labs(x = expression(X[1]), y = expression(X[2])) +
+  theme_minimal() +
+  theme(legend.position = "none")
+library(gridExtra)
+grid.arrange(p1,p2,nrow=2)
+
+
+# Gerekli paketleri yükleyin
+library(ggplot2)
+
+# Örnek bir veri seti oluşturun
+set.seed(123)
+n <- 20
+x1 <- c(rnorm(n, mean = 1), rnorm(n, mean = 3))
+x2 <- c(rnorm(n, mean = 2), rnorm(n, mean = 4))
+class <- factor(c(rep("Class 1", n), rep("Class 2", n)))
+
+# Veri çerçevesi oluşturun
+data <- data.frame(x1 = x1, x2 = x2, class = class)
+
+# Sınıf ortalamalarını hesaplayın
+mean_class1 <- colMeans(data[data$class == "Class 1", c("x1", "x2")])
+mean_class2 <- colMeans(data[data$class == "Class 2", c("x1", "x2")])
+
+# Doğrusal ayrım çizgisi için kesişim noktası ve eğim
+slope <- (mean_class2[2] - mean_class1[2]) / (mean_class2[1] - mean_class1[1])
+intercept <- mean_class1[2] - slope * mean_class1[1]
+
+# Sınıfları ayıran doğrusal ayrım çizgisini çizin
+ggplot(data, aes(x = x1, y = x2, color = class, shape = class)) +
+  geom_point(size = 3) +
+  geom_abline(intercept = intercept, slope = slope, linetype = "solid", color = "black", size = 0.8) +
+  geom_abline(intercept = intercept + 1, slope = slope, linetype = "dashed", color = "black", size = 0.8) +
+  geom_abline(intercept = intercept - 1, slope = slope, linetype = "dashed", color = "black", size = 0.8) +
+  scale_color_manual(values = c("Class 1" = "purple", "Class 2" = "dark red")) +
+  scale_shape_manual(values = c(17, 16)) +  # 17: triangle, 16: circle
+  labs(x = expression(X[1]), y = expression(X[2])) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+
+
+# Gerekli paketleri yükleyin
+library(ggplot2)
+
+# Örnek bir veri seti oluşturun
+set.seed(123)
+n <- 20
+x1 <- c(rnorm(n, mean = 1), rnorm(n, mean = 3))
+x2 <- c(rnorm(n, mean = 2), rnorm(n, mean = 4))
+class <- factor(c(rep("Class 1", n), rep("Class 2", n)))
+
+# Veri çerçevesi oluşturun
+data <- data.frame(x1 = x1, x2 = x2, class = class)
+
+# Sınıf ortalamalarını hesaplayın
+mean_class1 <- colMeans(data[data$class == "Class 1", c("x1", "x2")])
+mean_class2 <- colMeans(data[data$class == "Class 2", c("x1", "x2")])
+
+# Doğrusal ayrım çizgisi için kesişim noktası ve eğim
+slope <- -1
+intercept <- (mean_class1[2] + mean_class2[2]) / 2 - slope * (mean_class1[1] + mean_class2[1]) / 2
+
+# Veriyi ve ayrım çizgisini çizin
+ggplot(data, aes(x = x1, y = x2, color = class, shape = class)) +
+  geom_point(size = 3) +
+  geom_abline(intercept = intercept, slope = slope, linetype = "solid", color = "black", size = 0.8) +
+  geom_abline(intercept = intercept + 1, slope = slope, linetype = "dashed", color = "black", size = 0.8) +
+  geom_abline(intercept = intercept - 1, slope = slope, linetype = "dashed", color = "black", size = 0.8) +
+  scale_color_manual(values = c("Class 1" = "purple", "Class 2" = "dark red")) +
+  scale_shape_manual(values = c(17, 16)) +  # 17: triangle, 16: circle
+  labs(x = expression(X[1]), y = expression(X[2])) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# Gerekli paketleri yükleyin
+library(ggplot2)
+
+# Örnek bir veri seti oluşturun
+set.seed(123)
+n <- 20
+x1 <- c(rnorm(n, mean = 1), rnorm(n, mean = 3))
+x2 <- c(rnorm(n, mean = 2), rnorm(n, mean = 4))
+class <- factor(c(rep("Class 1", n), rep("Class 2", n)))
+
+# Veri çerçevesi oluşturun
+data <- data.frame(x1 = x1, x2 = x2, class = class)
+
+# Sınıf ortalamalarını hesaplayın
+mean_class1 <- colMeans(data[data$class == "Class 1", c("x1", "x2")])
+mean_class2 <- colMeans(data[data$class == "Class 2", c("x1", "x2")])
+
+# Doğrusal ayrım çizgisi için kesişim noktası ve eğim
+slope <- (mean_class2[2] - mean_class1[2]) / (mean_class2[1] - mean_class1[1])
+intercept <- mean(mean_class1[2] - slope * mean_class1[1], mean_class2[2] - slope * mean_class2[1])
+
+# Veriyi ve ayrım çizgisini çizin
+ggplot(data, aes(x = x1, y = x2, color = class, shape = class)) +
+  geom_point(size = 3) +
+  geom_abline(intercept = intercept, slope = slope, linetype = "solid", color = "black", size = 0.8) +
+  geom_abline(intercept = intercept + 1, slope = slope, linetype = "dashed", color = "black", size = 0.8) +
+  geom_abline(intercept = intercept - 1, slope = slope, linetype = "dashed", color = "black", size = 0.8) +
+  scale_color_manual(values = c("Class 1" = "purple", "Class 2" = "dark red")) +
+  scale_shape_manual(values = c(17, 16)) +  # 17: triangle, 16: circle
+  labs(x = expression(X[1]), y = expression(X[2])) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# Gerekli paketleri yükleyin
+library(ggplot2)
+
+# Örnek bir veri seti oluşturun
+set.seed(123)
+n <- 20
+x1 <- c(rnorm(n, mean = 1), rnorm(n, mean = 3))
+x2 <- c(rnorm(n, mean = 2), rnorm(n, mean = 4))
+class <- factor(c(rep("Class 1", n), rep("Class 2", n)))
+
+# Veri çerçevesi oluşturun
+data <- data.frame(x1 = x1, x2 = x2, class = class)
+
+# Sınıf ortalamalarını hesaplayın
+mean_class1 <- colMeans(data[data$class == "Class 1", c("x1", "x2")])
+mean_class2 <- colMeans(data[data$class == "Class 2", c("x1", "x2")])
+
+# Doğrusal ayrım çizgisi için kesişim noktası ve eğim
+slope <- -2.1# 45 derece eğim için -1
+intercept <- (mean_class1[2] + mean_class2[2]) / 2 - slope * (mean_class1[1] + mean_class2[1]) / 2
+
+# Veriyi ve ayrım çizgisini çizin
+p2<-ggplot(data, aes(x = x1, y = x2, color = class, shape = class)) +
+  geom_point(size = 3) +
+  geom_abline(intercept = intercept, slope = slope, linetype = "solid", color = "black", size = 0.8) +
+  geom_abline(intercept = intercept + 1, slope = slope, linetype = "dashed", color = "black", size = 0.8) +
+  geom_abline(intercept = intercept - 1, slope = slope, linetype = "dashed", color = "black", size = 0.8) +
+  scale_color_manual(values = c("Class 1" = "purple", "Class 2" = "dark red")) +
+  scale_shape_manual(values = c(17, 16)) +  # 17: triangle, 16: circle
+  labs(x = expression(X[1]), y = expression(X[2])) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+
+
+
+
+
+
+
+# Gerekli paketleri yükleyin
+library(ggplot2)
+
+# Örnek bir veri seti oluşturun
+set.seed(123)
+n <- 20
+x1 <- c(rnorm(n, mean = 1), rnorm(n, mean = 3))
+x2 <- c(rnorm(n, mean = 2), rnorm(n, mean = 4))
+class <- factor(c(rep("Class 1", n), rep("Class 2", n)))
+
+# Veri çerçevesi oluşturun
+data <- data.frame(x1 = x1, x2 = x2, class = class)
+
+# Sınıf ortalamalarını hesaplayın
+mean_class1 <- colMeans(data[data$class == "Class 1", c("x1", "x2")])
+mean_class2 <- colMeans(data[data$class == "Class 2", c("x1", "x2")])
+
+# Doğrusal ayrım çizgisi için kesişim noktası ve eğim
+slope <- -1  # 45 derece eğim için -1
+intercept <- (mean_class1[2] + mean_class2[2]) / 2 - slope * (mean_class1[1] + mean_class2[1]) / 2
+
+# Çizgi üzerinde olan noktaları filtreleyin
+data_filtered <- data[abs(data$x2 - (slope * data$x1 + intercept)) > 0.1, ]
+
+# Veriyi ve ayrım çizgisini çizin
+ggplot(data_filtered, aes(x = x1, y = x2, color = class, shape = class)) +
+  geom_point(size = 3) +
+  geom_abline(intercept = intercept, slope = slope, linetype = "solid", color = "black", size = 0.8) +
+  geom_abline(intercept = intercept + 1, slope = slope, linetype = "dashed", color = "black", size = 0.8) +
+  geom_abline(intercept = intercept - 1, slope = slope, linetype = "dashed", color = "black", size = 0.8) +
+  scale_color_manual(values = c("Class 1" = "purple", "Class 2" = "dark red")) +
+  scale_shape_manual(values = c(17, 16)) +  # 17: triangle, 16: circle
+  labs(x = expression(X[1]), y = expression(X[2])) +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+
+
+
+# Gerekli paketleri yükleyin
+library(ggplot2)
+
+# Örnek bir veri seti oluşturun
+set.seed(123)
+n <- 20
+x1 <- c(rnorm(n, mean = 1), rnorm(n, mean = 3))
+x2 <- c(rnorm(n, mean = 2), rnorm(n, mean = 4))
+class <- factor(c(rep("Class 1", n), rep("Class 2", n)))
+
+# Veri çerçevesi oluşturun
+data <- data.frame(x1 = x1, x2 = x2, class = class)
+
+# Sınıf ortalamalarını hesaplayın
+mean_class1 <- colMeans(data[data$class == "Class 1", c("x1", "x2")])
+mean_class2 <- colMeans(data[data$class == "Class 2", c("x1", "x2")])
+
+# Doğrusal ayrım çizgisi için kesişim noktası ve eğim
+slope <- -2  # 45 derece eğim için -1
+intercept <- (mean_class1[2] + mean_class2[2]) / 2 - slope * (mean_class1[1] + mean_class2[1]) / 2
+
+# Çizgi üzerinde olan noktaları filtreleyin
+data_filtered <- data[abs(data$x2 - (slope * data$x1 + intercept)) > 0.1, ]
+
+# Veriyi ve ayrım çizgisini çizin
+ggplot(data_filtered, aes(x = x1, y = x2, color = class, shape = class)) +
+  geom_point(size = 3) +
+  geom_abline(intercept = intercept, slope = slope, linetype = "solid", color = "black", size = 0.8) +
+  geom_abline(intercept = intercept + 1, slope = slope, linetype = "dashed", color = "black", size = 0.8) +
+  geom_abline(intercept = intercept - 1, slope = slope, linetype = "dashed", color = "black", size = 0.8) +
+  scale_color_manual(values = c("Class 1" = "purple", "Class 2" = "dark red")) +
+  scale_shape_manual(values = c(17, 16)) +  # 17: triangle, 16: circle
+  labs(x = expression(X[1]), y = expression(X[2])) +
+  ggtitle("Separable Data") +
+  theme_minimal() +
+  theme(
+    legend.position = "none",
+    axis.line = element_blank(), 
+    panel.grid = element_blank(),
+    axis.ticks = element_blank(),
+    axis.title.x = element_text(size = 16),
+    axis.title.y = element_text(size = 16),
+    axis.text.x = element_text(size = 14, face = "bold"), # Make x-axis text bold
+    axis.text.y = element_text(size = 14, face = "bold"), # Make y-axis text bold
+    plot.title = element_text(hjust = 0.5, size = 20, face = "bold") # Center and bold the title
+  )
